@@ -1,15 +1,48 @@
+import os
 import json
 
 
-with open("data/corridor_risk.json") as f:
+# --------------------------------------------------
+# PATHS
+# --------------------------------------------------
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+DATA_DIR = os.path.join(
+    BASE_DIR,
+    "data"
+)
+
+
+# --------------------------------------------------
+# LOAD RISK TABLES
+# --------------------------------------------------
+
+with open(
+    os.path.join(DATA_DIR, "corridor_risk.json"),
+    "r",
+    encoding="utf-8"
+) as f:
     corridor_risk = json.load(f)
 
-with open("data/junction_risk.json") as f:
+with open(
+    os.path.join(DATA_DIR, "junction_risk.json"),
+    "r",
+    encoding="utf-8"
+) as f:
     junction_risk = json.load(f)
 
-with open("data/event_severity.json") as f:
+with open(
+    os.path.join(DATA_DIR, "event_severity.json"),
+    "r",
+    encoding="utf-8"
+) as f:
     event_severity = json.load(f)
 
+
+# --------------------------------------------------
+# PRIORITY LOGIC
+# --------------------------------------------------
 
 def get_priority(tii):
 
@@ -25,11 +58,15 @@ def get_priority(tii):
     return "Low"
 
 
+# --------------------------------------------------
+# RESOURCE RECOMMENDATION ENGINE
+# --------------------------------------------------
+
 def recommend_resources(
-        event_type,
-        corridor,
-        junction,
-        tii
+    event_type,
+    corridor,
+    junction,
+    tii
 ):
 
     corridor_score = corridor_risk.get(
@@ -48,13 +85,10 @@ def recommend_resources(
     )
 
     risk_score = (
-        0.5 * tii
-        +
-        0.2 * corridor_score
-        +
-        0.2 * junction_score
-        +
-        0.1 * severity_score
+        0.5 * float(tii)
+        + 0.2 * float(corridor_score)
+        + 0.2 * float(junction_score)
+        + 0.1 * float(severity_score)
     )
 
     priority = get_priority(tii)
@@ -62,28 +96,28 @@ def recommend_resources(
     traffic_police = int(
         max(
             2,
-            risk_score / 10
+            round(risk_score / 10)
         )
     )
 
     barricades = int(
         max(
             5,
-            risk_score / 4
+            round(risk_score / 4)
         )
     )
 
     tow_trucks = int(
         max(
             1,
-            risk_score / 50
+            round(risk_score / 50)
         )
     )
 
     ambulances = int(
         max(
             1,
-            risk_score / 75
+            round(risk_score / 75)
         )
     )
 
@@ -91,21 +125,32 @@ def recommend_resources(
 
         "priority": priority,
 
-        "traffic_police":
-            traffic_police,
+        "risk_score": round(
+            risk_score,
+            2
+        ),
 
-        "barricades":
-            barricades,
+        "traffic_police": traffic_police,
 
-        "tow_trucks":
-            tow_trucks,
+        "barricades": barricades,
 
-        "ambulances":
-            ambulances,
+        "tow_trucks": tow_trucks,
 
-        "risk_score":
-            round(
-                risk_score,
-                2
-            )
+        "ambulances": ambulances
     }
+
+
+# --------------------------------------------------
+# LOCAL TEST
+# --------------------------------------------------
+
+if __name__ == "__main__":
+
+    result = recommend_resources(
+        event_type="planned",
+        corridor="Mysore Road",
+        junction="Nayandahalli",
+        tii=82
+    )
+
+    print(result)

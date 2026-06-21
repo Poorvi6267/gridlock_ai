@@ -1,4 +1,4 @@
-# diversion_engine.py
+# diversion.py
 
 DIVERSION_MAP = {
 
@@ -36,20 +36,67 @@ DIVERSION_MAP = {
 }
 
 
-def recommend_diversion(corridor, tii):
+def get_diversion_level(tii):
 
-    if tii < 75:
-        return {
-            "activate": False,
-            "routes": []
-        }
+    if tii >= 90:
+        return "Full Diversion"
+
+    elif tii >= 80:
+        return "Major Diversion"
+
+    elif tii >= 70:
+        return "Partial Diversion"
+
+    return "Monitor Only"
+
+
+def recommend_diversion(
+    corridor,
+    tii
+):
 
     routes = DIVERSION_MAP.get(
         corridor,
         ["Nearest Parallel Corridor"]
     )
 
+    if tii < 70:
+
+        return {
+
+            "activate": False,
+
+            "level": "Monitor Only",
+
+            "routes": [],
+
+            "message":
+                "Traffic impact not high enough for diversion."
+        }
+
     return {
+
         "activate": True,
-        "routes": routes
+
+        "level":
+            get_diversion_level(tii),
+
+        "routes":
+            routes,
+
+        "recommended_route":
+            routes[0],
+
+        "message":
+            f"Activate diversion plan for {corridor}."
     }
+
+
+if __name__ == "__main__":
+
+    print(
+        recommend_diversion(
+            "Mysore Road",
+            88
+        )
+    )
