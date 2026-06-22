@@ -1,6 +1,11 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 
+from maps_engine import (
+    geocode_location,
+    get_route
+)
+
 from resource_engine import recommend_resources
 from diversion import recommend_diversion
 
@@ -12,11 +17,10 @@ from ml_engine import (
 )
 
 app = FastAPI(
-    title="Gridlock AI",
-    version="1.0.0",
-    description="Traffic Impact Intelligence Platform"
+    title="TrafficSense",
+    version="2.0.0",
+    description="AI Powered Traffic Operations Center"
 )
-
 
 # ==================================================
 # HEALTH CHECK
@@ -26,7 +30,8 @@ app = FastAPI(
 def home():
 
     return {
-        "message": "Gridlock AI Running"
+        "message": "TrafficSense Running",
+        "status": "online"
     }
 
 
@@ -39,7 +44,7 @@ def health():
 
 
 # ==================================================
-# RESOURCE REQUEST
+# REQUEST MODELS
 # ==================================================
 
 class ResourceRequest(BaseModel):
@@ -49,10 +54,6 @@ class ResourceRequest(BaseModel):
     junction: str
     tii: float
 
-
-# ==================================================
-# ML PREDICTION REQUEST
-# ==================================================
 
 class PredictionRequest(BaseModel):
 
@@ -88,63 +89,73 @@ class PredictionRequest(BaseModel):
     historical_impact: float
 
 
+class RouteRequest(BaseModel):
+
+    start_location: str
+    end_location: str
+
+
 # ==================================================
 # RESOURCE RECOMMENDATION
 # ==================================================
 
 @app.post("/recommend")
-def recommend(
-    request: ResourceRequest
-):
+def recommend(request: ResourceRequest):
 
-    resource_result = recommend_resources(
-        request.event_type,
-        request.corridor,
-        request.junction,
-        request.tii
-    )
+    try:
 
-    diversion_result = recommend_diversion(
-        request.corridor,
-        request.tii
-    )
+        resource_result = recommend_resources(
+            request.event_type,
+            request.corridor,
+            request.junction,
+            request.tii
+        )
 
-    return {
+        diversion_result = recommend_diversion(
+            request.corridor,
+            request.tii
+        )
 
-        "priority":
-            resource_result["priority"],
+        return {
 
-        "risk_score":
-            resource_result["risk_score"],
+            "priority":
+                resource_result["priority"],
 
-        "resources": {
+            "risk_score":
+                resource_result["risk_score"],
 
-            "traffic_police":
-                resource_result["traffic_police"],
+            "resources": {
 
-            "barricades":
-                resource_result["barricades"],
+                "traffic_police":
+                    resource_result["traffic_police"],
 
-            "tow_trucks":
-                resource_result["tow_trucks"],
+                "barricades":
+                    resource_result["barricades"],
 
-            "ambulances":
-                resource_result["ambulances"]
-        },
+                "tow_trucks":
+                    resource_result["tow_trucks"],
 
-        "diversion":
-            diversion_result
-    }
+                "ambulances":
+                    resource_result["ambulances"]
+            },
+
+            "diversion":
+                diversion_result
+        }
+
+    except Exception as e:
+
+        return {
+            "error": str(e)
+        }
 
 
 # ==================================================
-# ML PREDICTION
+# COMBINED ML PREDICTION
 # ==================================================
 
 @app.post("/predict")
-def predict(
-    request: PredictionRequest
-):
+def predict(request: PredictionRequest):
 
     try:
 
@@ -165,7 +176,7 @@ def predict(
 
 
 # ==================================================
-# DURATION ONLY
+# DURATION PREDICTION
 # ==================================================
 
 @app.post("/predict-duration")
@@ -192,7 +203,7 @@ def predict_duration_api(
 
 
 # ==================================================
-# CLOSURE ONLY
+# ROAD CLOSURE PREDICTION
 # ==================================================
 
 @app.post("/predict-closure")
@@ -219,7 +230,7 @@ def predict_closure_api(
 
 
 # ==================================================
-# TII ONLY
+# TRAFFIC IMPACT INDEX
 # ==================================================
 
 @app.post("/predict-tii")
@@ -246,6 +257,60 @@ def predict_tii_api(
 
 
 # ==================================================
+# ROUTE PLANNING
+# ==================================================
+
+@app.post("/route")
+def route(
+    request: RouteRequest
+):
+
+    try:
+
+        start = geocode_location(
+            request.start_location
+        )
+
+        end = geocode_location(
+            request.end_location
+        )
+
+        if start is None:
+
+            return {
+                "error":
+                    f"Location not found: {request.start_location}"
+            }
+
+        if end is None:
+
+            return {
+                "error":
+                    f"Location not found: {request.end_location}"
+            }
+
+        coordinates = get_route(
+            start[0],
+            start[1],
+            end[0],
+            end[1]
+        )
+
+        return {
+
+            "start": start,
+            "end": end,
+            "coordinates": coordinates
+        }
+
+    except Exception as e:
+
+        return {
+            "error": str(e)
+        }
+
+
+# ==================================================
 # LOCAL RUN
 # ==================================================
 
@@ -258,4 +323,3 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=8000
     )
-    
