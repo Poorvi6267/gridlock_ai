@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi import HTTPException
 from pydantic import BaseModel
 
 from maps_engine import (
@@ -124,6 +125,12 @@ def recommend(request: ResourceRequest):
             "risk_score":
                 resource_result["risk_score"],
 
+            "strategy":
+                resource_result["strategy"],
+
+            "estimated_clearance":
+                resource_result["estimated_clearance"],
+
             "resources": {
 
                 "traffic_police":
@@ -145,9 +152,10 @@ def recommend(request: ResourceRequest):
 
     except Exception as e:
 
-        return {
-            "error": str(e)
-        }
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
 
 
 # ==================================================
@@ -170,9 +178,10 @@ def predict(request: PredictionRequest):
         print("\n===== PREDICT ERROR =====")
         print(e)
 
-        return {
-            "error": str(e)
-        }
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
 
 
 # ==================================================
@@ -196,10 +205,11 @@ def predict_duration_api(
         }
 
     except Exception as e:
-
-        return {
-            "error": str(e)
-        }
+        
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
 
 
 # ==================================================
@@ -224,9 +234,10 @@ def predict_closure_api(
 
     except Exception as e:
 
-        return {
-            "error": str(e)
-        }
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
 
 
 # ==================================================
@@ -251,9 +262,10 @@ def predict_tii_api(
 
     except Exception as e:
 
-        return {
-            "error": str(e)
-        }
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
 
 
 # ==================================================
@@ -277,17 +289,17 @@ def route(
 
         if start is None:
 
-            return {
-                "error":
-                    f"Location not found: {request.start_location}"
-            }
+            raise HTTPException(
+                status_code=404,
+                detail=f"Location not found: {request.start_location}"
+            )
 
         if end is None:
 
-            return {
-                "error":
-                    f"Location not found: {request.end_location}"
-            }
+            raise HTTPException(
+                status_code=404,
+                detail=f"Location not found: {request.end_location}"
+            )
 
         coordinates = get_route(
             start[0],
@@ -305,9 +317,10 @@ def route(
 
     except Exception as e:
 
-        return {
-            "error": str(e)
-        }
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
 
 
 # ==================================================

@@ -1,6 +1,7 @@
 import subprocess
 import time
 import webbrowser
+import requests
 
 # Start FastAPI
 backend = subprocess.Popen(
@@ -10,7 +11,22 @@ backend = subprocess.Popen(
     ]
 )
 
-time.sleep(3)
+for _ in range(20):
+
+    try:
+
+        r = requests.get(
+            "http://127.0.0.1:8000/health",
+            timeout=1
+        )
+
+        if r.status_code == 200:
+            break
+
+    except Exception:
+        pass
+
+    time.sleep(1)
 
 # Start Streamlit
 frontend = subprocess.Popen(

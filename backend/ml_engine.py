@@ -11,7 +11,7 @@ import traceback
 BASE_DIR = os.path.dirname(
     os.path.abspath(__file__)
 )
-
+ 
 MODEL_DIR = os.path.join(
     BASE_DIR,
     "models"
@@ -42,21 +42,31 @@ def load_model(filename):
 # LOAD MODELS
 # ==================================================
 
-duration_model = load_model(
-    "duration_model.pkl"
-)
+try:
 
-closure_model = load_model(
-    "closure_model.pkl"
-)
+    duration_model = load_model(
+        "duration_model.pkl"
+    )
 
-tii_model = load_model(
-    "tii_model.pkl"
-)
+    closure_model = load_model(
+        "closure_model.pkl"
+    )
 
-feature_columns = load_model(
-    "feature_columns.pkl"
-)
+    tii_model = load_model(
+        "tii_model.pkl"
+    )
+
+    feature_columns = load_model(
+        "feature_columns.pkl"
+    )
+
+except Exception as e:
+
+    print(
+        f"MODEL LOAD FAILURE: {e}"
+    )
+
+    raise
 
 
 print("\n==========================")

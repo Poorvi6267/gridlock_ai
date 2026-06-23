@@ -1,4 +1,3 @@
-
 import streamlit as st
 import requests
 import pandas as pd
@@ -69,25 +68,10 @@ st.divider()
 
 c1, c2, c3, c4 = st.columns(4)
 
-c1.metric(
-    "Active Incidents",
-    17
-)
-
-c2.metric(
-    "Critical Incidents",
-    3
-)
-
-c3.metric(
-    "Police Deployed",
-    124
-)
-
-c4.metric(
-    "Diversions Active",
-    8
-)
+c1.metric("Active Incidents", 17)
+c2.metric("Critical Incidents", 3)
+c3.metric("Police Deployed", 124)
+c4.metric("Diversions Active", 8)
 
 st.divider()
 
@@ -111,9 +95,11 @@ with st.sidebar:
         "Corridor",
         [
             "Mysore Road",
-            "Bellary Road",
-            "Outer Ring Road",
-            "Bannerghatta Road"
+            "Old Madras Road",
+            "Tumkur Road",
+            "Bellary Road 1",
+            "ORR East 2",
+            "Bannerghata Road"
         ]
     )
 
@@ -179,6 +165,10 @@ severity_map = {
 
 if analyze:
 
+    result = {}
+    rec = {}
+    diversion = {}
+
     peak_hour = (
         1
         if hour in [8, 9, 10, 17, 18, 19, 20]
@@ -237,6 +227,14 @@ if analyze:
             json=payload
         ).json()
 
+        if "traffic_impact_index" not in result:
+
+            st.error(
+                f"Prediction service error: {result}"
+            )
+
+            st.stop()
+
         rec = requests.post(
             f"{API_URL}/recommend",
             json={
@@ -247,22 +245,38 @@ if analyze:
                     result["traffic_impact_index"]
             }
         ).json()
-        
-                st.success("Analysis Complete")
+
+        if "resources" not in rec:
+
+            st.error(
+                f"Recommendation service error: {rec}"
+            )
+
+            st.stop()
+
+        st.success("Analysis Complete")
+
+        # =====================================================
+        # EXECUTIVE SUMMARY
+        # =====================================================
 
         st.header("🚨 Executive Summary")
 
         st.info(
             f"""
-            Priority: {rec['priority']}
+                Priority: {rec['priority']}
 
-            Expected Clearance:
-            {rec.get('estimated_clearance','N/A')}
+                Expected Clearance:
+                {rec.get('estimated_clearance','N/A')}
 
-            Recommended Action:
-            {rec.get('strategy','N/A')}
+                Recommended Action:
+                {rec.get('strategy','N/A')}
             """
         )
+
+        # =====================================================
+        # TII GAUGE
+        # =====================================================
 
         gauge = go.Figure(
             go.Indicator(
@@ -284,32 +298,40 @@ if analyze:
             gauge,
             use_container_width=True
         )
-        
-                st.header("🚓 Resource Deployment")
 
-        r = rec["resources"]
+        # =====================================================
+        # RESOURCE DEPLOYMENT
+        # =====================================================
+
+        st.header("🚓 Resource Deployment")
+
+        resources = rec["resources"]
 
         c1, c2, c3, c4 = st.columns(4)
 
         c1.metric(
             "Police",
-            r["traffic_police"]
+            resources["traffic_police"]
         )
 
         c2.metric(
             "Barricades",
-            r["barricades"]
+            resources["barricades"]
         )
 
         c3.metric(
             "Tow Trucks",
-            r["tow_trucks"]
+            resources["tow_trucks"]
         )
 
         c4.metric(
             "Ambulances",
-            r["ambulances"]
+            resources["ambulances"]
         )
+
+        # =====================================================
+        # DIVERSION STRATEGY
+        # =====================================================
 
         st.header("🚧 Diversion Strategy")
 
@@ -321,26 +343,32 @@ if analyze:
                 diversion["level"]
             )
 
-            st.metric(
-                "Recommended Route",
-                diversion[
-                    "recommended_route"
-                ]
-            )
+            c1, c2 = st.columns(2)
 
-            st.metric(
-                "Time Saving",
-                diversion[
-                    "expected_time_saving"
-                ]
-            )
+            with c1:
 
-            st.metric(
-                "Congestion Reduction",
-                diversion[
-                    "expected_congestion_reduction"
-                ]
-            )
+                st.metric(
+                    "Recommended Route",
+                    diversion[
+                        "recommended_route"
+                    ]
+                )
+
+                st.metric(
+                    "Time Saving",
+                    diversion[
+                        "expected_time_saving"
+                    ]
+                )
+
+            with c2:
+
+                st.metric(
+                    "Congestion Reduction",
+                    diversion[
+                        "expected_congestion_reduction"
+                    ]
+                )
 
             st.write(
                 diversion["strategy"]
@@ -357,14 +385,19 @@ if analyze:
         st.error(
             f"Error: {str(e)}"
         )
-        
-        # =====================================================
-        # ROUTE VISUALIZATION
-        # =====================================================
 
-        st.divider()
+    if not result or not rec:
+        st.stop()
 
-        st.header("🗺 Route Intelligence")
+    # =====================================================
+    # ROUTE INTELLIGENCE
+    # =====================================================
+
+    st.divider()
+
+    st.header("🗺 Route Intelligence")
+
+    try:
 
         route_response = requests.post(
             f"{API_URL}/route",
@@ -374,270 +407,327 @@ if analyze:
             }
         ).json()
 
-        if "coordinates" in route_response:
+    except Exception:
 
-            coords = route_response["coordinates"]
+        route_response = {}
 
-            route_map = folium.Map(
-                location=coords[0],
-                zoom_start=12
-            )
+    if ("coordinates" in route_response and len(route_response["coordinates"]) > 1):
+        coords = route_response["coordinates"]
 
-            folium.PolyLine(
-                coords,
-                weight=6,
-                color="red"
-            ).add_to(route_map)
-
-            folium.Marker(
-                coords[0],
-                popup="Incident Location"
-            ).add_to(route_map)
-
-            folium.Marker(
-                coords[-1],
-                popup="Diversion Destination"
-            ).add_to(route_map)
-
-            st_folium(
-                route_map,
-                width=1200,
-                height=550
-            )
-
-        else:
-
-            st.warning(
-                "Route information unavailable."
-            )
-            
-           # =====================================================
-        # IMPACT INTELLIGENCE
-        # =====================================================
-
-        st.divider()
-
-        st.header("📊 Impact Intelligence")
-
-        c1, c2, c3, c4 = st.columns(4)
-
-        c1.metric(
-            "Traffic Impact Index",
-            round(
-                result["traffic_impact_index"],
-                2
-            )
+        route_map = folium.Map(
+            location=coords[0],
+            zoom_start=12
         )
 
-        c2.metric(
-            "Closure Probability",
-            f"{result['road_closure_probability']*100:.1f}%"
+        folium.PolyLine(
+            coords,
+            weight=6,
+            color="red"
+        ).add_to(route_map)
+
+        folium.Marker(
+            coords[0],
+            popup="Incident Location"
+        ).add_to(route_map)
+
+        folium.Marker(
+            coords[-1],
+            popup="Diversion Destination"
+        ).add_to(route_map)
+
+        st_folium(
+            route_map,
+            width=1200,
+            height=550
         )
 
-        c3.metric(
-            "Duration",
-            f"{result['predicted_duration_minutes']:.0f} min"
+    else:
+
+        st.warning(
+            "Route information unavailable."
         )
 
-        c4.metric(
-            "Risk Score",
-            round(
-                rec["risk_score"],
-                2
-            )
-        )     
-        
-                # =====================================================
-        # AI EXPLANATION
-        # =====================================================
+    # =====================================================
+    # IMPACT INTELLIGENCE
+    # =====================================================
 
-        st.divider()
+    st.divider()
 
-        st.header("🤖 AI Reasoning")
+    st.header("📊 Impact Intelligence")
 
-        reasons = result.get(
-            "explanation",
-            []
+    c1, c2, c3, c4 = st.columns(4)
+
+    c1.metric(
+        "Traffic Impact Index",
+        round(
+            result["traffic_impact_index"],
+            2
+        )
+    )
+
+    c2.metric(
+        "Closure Probability",
+        f"{result['road_closure_probability'] * 100:.1f}%"
+    )
+
+    c3.metric(
+        "Duration",
+        f"{result['predicted_duration_minutes']:.0f} min"
+    )
+
+    c4.metric(
+        "Risk Score",
+        round(
+            rec["risk_score"],
+            2
+        )
+    )
+
+    # =====================================================
+    # AI REASONING
+    # =====================================================
+
+    st.divider()
+
+    st.header("🤖 AI Reasoning")
+
+    reasons = result.get(
+        "explanation",
+        []
+    )
+
+    if reasons:
+
+        for reason in reasons:
+
+            st.success(reason)
+
+    else:
+
+        st.info(
+            "No explanation available."
         )
 
-        if reasons:
+    # =====================================================
+    # SMART ALERTS
+    # =====================================================
 
-            for reason in reasons:
+    st.divider()
 
-                st.success(reason)
+    st.header("🚨 Smart Alerts")
 
-        else:
+    if result["road_closure_probability"] > 0.8:
 
-            st.info(
-                "No explanation available."
-            )   
-            
-                    # =====================================================
-        # CORRIDOR RISK
-        # =====================================================
+        st.error(
+            "High probability of road closure."
+        )
 
-        st.divider()
+    if result["traffic_impact_index"] > 80:
 
-        st.header("📈 Corridor Risk Ranking")
+        st.error(
+            "Severe congestion predicted."
+        )
 
-        risk_df = pd.DataFrame({
+    if result["predicted_duration_minutes"] > 180:
 
-            "Corridor": [
+        st.warning(
+            "Extended disruption expected."
+        )
 
-                "Outer Ring Road",
+    if (
+        result["road_closure_probability"] <= 0.8
+        and result["traffic_impact_index"] <= 80
+    ):
 
-                "Mysore Road",
+        st.success(
+            "No critical alerts."
+        )
 
-                "Bellary Road",
+    # =====================================================
+    # RESOURCE OPTIMIZATION
+    # =====================================================
 
-                "Bannerghatta Road"
-            ],
+    st.divider()
 
-            "Risk": [
+    st.header("🎯 Resource Optimization")
 
-                88,
+    if rec["risk_score"] > 80:
 
-                76,
+        st.error(
+            "Deploy maximum field resources immediately."
+        )
 
-                58,
+    elif rec["risk_score"] > 60:
 
-                42
+        st.warning(
+            "Deploy moderate resources and monitor."
+        )
+
+    else:
+
+        st.success(
+            "Routine deployment sufficient."
+        )
+
+    st.write(
+        rec.get(
+            "strategy",
+            "No strategy available."
+        )
+    )
+
+    # =====================================================
+    # CORRIDOR RISK RANKING
+    # =====================================================
+
+    st.divider()
+
+    st.header("📈 Corridor Risk Ranking")
+
+    risk_df = pd.DataFrame({
+
+        "Corridor": [
+
+            "Mysore Road",
+            "Old Madras Road",
+            "Tumkur Road",
+            "Bellary Road 1",
+            "ORR East 2",
+            "Bannerghata Road"
+        ],
+
+        "Risk": [
+
+            76,
+            82,
+            69,
+            58,
+            88,
+            42
+        ]
+    })
+
+    st.bar_chart(
+        risk_df.set_index(
+            "Corridor"
+        )
+    )
+
+    # =====================================================
+    # HISTORICAL COMPARISON
+    # =====================================================
+
+    st.divider()
+
+    st.header("📉 Historical Comparison")
+
+    history = pd.DataFrame({
+
+        "Scenario": [
+
+            "Historical Average",
+            "Current Incident"
+        ],
+
+        "Duration": [
+
+            95,
+
+            result[
+                "predicted_duration_minutes"
             ]
-        })
+        ]
+    })
 
-        st.bar_chart(
-            risk_df.set_index(
-                "Corridor"
-            )
-        )    
-        
-                # =====================================================
-        # HISTORICAL COMPARISON
-        # =====================================================
-
-        st.divider()
-
-        st.header("📉 Historical Comparison")
-
-        history = pd.DataFrame({
-
-            "Scenario": [
-
-                "Historical Average",
-
-                "Current Incident"
-            ],
-
-            "Duration": [
-
-                95,
-
-                result[
-                    "predicted_duration_minutes"
-                ]
-            ]
-        })
-
-        st.bar_chart(
-            history.set_index(
-                "Scenario"
-            )
-        )   
-        
-                # =====================================================
-        # INCIDENT TIMELINE
-        # =====================================================
-
-        st.divider()
-
-        st.header("🕒 Incident Lifecycle")
-
-        st.markdown(
-            """
-            ✅ Incident Reported
-
-            ↓
-
-            🤖 AI Impact Assessment
-
-            ↓
-
-            🚓 Resource Deployment
-
-            ↓
-
-            🚧 Diversion Planning
-
-            ↓
-
-            🟢 Expected Resolution
-            """
+    st.bar_chart(
+        history.set_index(
+            "Scenario"
         )
-        
-                # =====================================================
-        # INCIDENT REPORT
-        # =====================================================
+    )
 
-        report = f"""
-TRAFFICSENSE INCIDENT REPORT
+    # =====================================================
+    # INCIDENT LIFECYCLE
+    # =====================================================
 
-Location:
-{junction_name}
+    st.divider()
 
-Corridor:
-{corridor_name}
+    st.header("🕒 Incident Lifecycle")
 
-Priority:
-{rec['priority']}
+    st.markdown(
+        """
+        ✅ Incident Reported
 
-Traffic Impact Index:
-{result['traffic_impact_index']}
+        ↓
 
-Closure Probability:
-{result['road_closure_probability']}
+        🤖 AI Impact Assessment
 
-Predicted Duration:
-{result['predicted_duration_minutes']}
+        ↓
 
-Risk Score:
-{rec['risk_score']}
+        🚓 Resource Deployment
 
-Clearance Estimate:
-{rec.get('estimated_clearance','N/A')}
+        ↓
 
-Recommended Action:
-{rec.get('strategy','N/A')}
-"""
+        🚧 Diversion Planning
 
-        st.download_button(
-            "📄 Download Incident Report",
-            report,
-            file_name="TrafficSense_Report.txt"
-        )
-        
-                # =====================================================
-        # WHAT IF SIMULATOR
-        # =====================================================
+        ↓
 
-        st.divider()
+        🟢 Expected Resolution
+        """
+    )
 
-        st.header("🧪 Scenario Simulator")
+    # =====================================================
+    # INCIDENT REPORT
+    # =====================================================
 
-        sim_vehicle_count = st.slider(
-            "Simulated Vehicle Count",
-            0,
-            15000,
-            vehicle_count,
-            key="sim_vehicle"
-        )
+    report = f"""TRAFFICSENSE INCIDENT REPORT
 
-        sim_severity = st.selectbox(
-            "Simulated Severity",
-            ["Low", "Medium", "High"],
-            key="sim_severity"
-        )
+                Location: {junction_name}
+                Corridor: {corridor_name}
 
-        simulated_tii = min(
+                Priority: {rec['priority']}
+
+                Traffic Impact Index: {result['traffic_impact_index']}
+                Closure Probability: {result['road_closure_probability']}
+                Predicted Duration: {result['predicted_duration_minutes']}
+
+                Risk Score: {rec['risk_score']}
+                Clearance Estimate: {rec.get('estimated_clearance','N/A')}
+
+                Recommended Action:
+                {rec.get('strategy','N/A')}
+                """
+    
+    st.download_button(
+        "📄 Download Incident Report",
+        report,
+        file_name="TrafficSense_Report.txt"
+    )
+
+    # =====================================================
+    # WHAT IF SIMULATOR
+    # =====================================================
+
+    st.divider()
+
+    st.header("🧪 Scenario Simulator")
+
+    sim_vehicle_count = st.slider(
+        "Simulated Vehicle Count",
+        0,
+        15000,
+        vehicle_count,
+        key="sim_vehicle"
+    )
+
+    sim_severity = st.selectbox(
+        "Simulated Severity",
+        ["Low", "Medium", "High"],
+        key="sim_severity"
+    )
+
+    simulated_tii = max(
+        0,
+        min(
             100,
             result["traffic_impact_index"]
             + (sim_vehicle_count - vehicle_count) / 500
@@ -646,89 +736,22 @@ Recommended Action:
                 - severity_map[severity]
             ) / 5
         )
+    )
 
-        st.metric(
-            "Projected TII",
-            round(simulated_tii, 2)
-        )
-        
-                # =====================================================
-        # RESOURCE OPTIMIZATION
-        # =====================================================
+    st.metric(
+        "Projected TII",
+        round(simulated_tii, 2)
+    )
 
-        st.divider()
+    # =====================================================
+    # COMMAND RECOMMENDATION
+    # =====================================================
 
-        st.header("🎯 Resource Optimization")
+    st.divider()
 
-        if rec["risk_score"] > 80:
+    st.header("📋 Recommended Command Action")
 
-            st.error(
-                "Deploy maximum field resources immediately."
-            )
-
-        elif rec["risk_score"] > 60:
-
-            st.warning(
-                "Deploy moderate resources and monitor."
-            )
-
-        else:
-
-            st.success(
-                "Routine deployment sufficient."
-            )
-
-        st.write(
-            rec.get(
-                "strategy",
-                "No strategy available."
-            )
-        )
-        
-                # =====================================================
-        # SMART ALERTS
-        # =====================================================
-
-        st.divider()
-
-        st.header("🚨 Smart Alerts")
-
-        if result["road_closure_probability"] > 0.8:
-
-            st.error(
-                "High probability of road closure."
-            )
-
-        if result["traffic_impact_index"] > 80:
-
-            st.error(
-                "Severe congestion predicted."
-            )
-
-        if result["predicted_duration_minutes"] > 180:
-
-            st.warning(
-                "Extended disruption expected."
-            )
-
-        if (
-            result["road_closure_probability"] <= 0.8
-            and result["traffic_impact_index"] <= 80
-        ):
-
-            st.success(
-                "No critical alerts."
-            )
-            
-                    # =====================================================
-        # COMMAND RECOMMENDATION
-        # =====================================================
-
-        st.divider()
-
-        st.header("📋 Recommended Command Action")
-
-        command_text = f"""
+    command_text = f"""
 Priority Level: {rec['priority']}
 
 Recommended Route:
@@ -741,146 +764,154 @@ Expected Time Saving:
 {diversion.get('expected_time_saving', 'N/A')}
 """
 
-        st.code(command_text)
-        
-                # =====================================================
-        # INCIDENT CRITICALITY SCORE
-        # =====================================================
+    st.code(command_text)
 
-        st.divider()
+    # =====================================================
+    # INCIDENT CRITICALITY SCORE
+    # =====================================================
 
-        st.header("⚡ Incident Criticality")
+    st.divider()
 
-        criticality = round(
-            (
-                result["traffic_impact_index"]
-                + rec["risk_score"]
-            ) / 2,
-            2
+    st.header("⚡ Incident Criticality")
+
+    criticality = round(
+        (
+            result["traffic_impact_index"]
+            + rec["risk_score"]
+        ) / 2,
+        2
+    )
+
+    st.metric(
+        "Criticality Score",
+        criticality
+    )
+
+    st.progress(
+        min(
+            criticality / 100,
+            1.0
+        )
+    )
+
+    # =====================================================
+    # LIVE OPERATIONS FEED
+    # =====================================================
+
+    st.divider()
+
+    st.header("📡 Operations Feed")
+
+    feed = pd.DataFrame({
+
+        "Time": [
+            "18:05",
+            "18:12",
+            "18:20",
+            "18:27"
+        ],
+
+        "Event": [
+
+            "Incident Reported",
+
+            "Prediction Generated",
+
+            "Resources Assigned",
+
+            "Diversion Activated"
+        ]
+    })
+
+    st.dataframe(
+        feed,
+        use_container_width=True
+    )
+
+    # =====================================================
+    # AI ACTION CENTER
+    # =====================================================
+
+    st.divider()
+
+    st.header("🤖 AI Recommended Actions")
+
+    actions = []
+
+    if result["traffic_impact_index"] > 80:
+
+        actions.append(
+            "Activate full diversion plan"
         )
 
-        st.metric(
-            "Criticality Score",
-            criticality
+    if result["road_closure_probability"] > 0.7:
+
+        actions.append(
+            "Prepare road closure resources"
         )
 
-        st.progress(
-            min(
-                criticality / 100,
-                1.0
-            )
+    if rec["risk_score"] > 75:
+
+        actions.append(
+            "Deploy additional traffic police"
         )
-        
-                # =====================================================
-        # LIVE OPERATIONS FEED
-        # =====================================================
 
-        st.divider()
+    if not actions:
 
-        st.header("📡 Operations Feed")
-
-        feed = pd.DataFrame({
-
-            "Time": [
-                "18:05",
-                "18:12",
-                "18:20",
-                "18:27"
-            ],
-
-            "Event": [
-
-                "Incident Reported",
-
-                "Prediction Generated",
-
-                "Resources Assigned",
-
-                "Diversion Activated"
-            ]
-        })
-
-        st.dataframe(
-            feed,
-            use_container_width=True
+        actions.append(
+            "Continue monitoring traffic conditions"
         )
-        
-                # =====================================================
-        # AI ACTION CENTER
-        # =====================================================
 
-        st.divider()
+    for action in actions:
 
-        st.header("🤖 AI Recommended Actions")
+        st.success(action)
 
-        actions = []
+    # =====================================================
+    # RESOURCE UTILIZATION
+    # =====================================================
 
-        if result["traffic_impact_index"] > 80:
-            actions.append(
-                "Activate full diversion plan"
-            )
+    st.divider()
 
-        if result["road_closure_probability"] > 0.7:
-            actions.append(
-                "Prepare road closure resources"
-            )
+    st.header("📊 Resource Utilization")
 
-        if rec["risk_score"] > 75:
-            actions.append(
-                "Deploy additional traffic police"
-            )
+    resource_df = pd.DataFrame({
 
-        if not actions:
-            actions.append(
-                "Continue monitoring traffic conditions"
-            )
+        "Resource": [
 
-        for action in actions:
-            st.success(action)
-            
-            
-                    # =====================================================
-        # RESOURCE UTILIZATION
-        # =====================================================
+            "Police",
+            "Barricades",
+            "Tow Trucks",
+            "Ambulances"
+        ],
 
-        st.divider()
+        "Units": [
 
-        st.header("📊 Resource Utilization")
+            resources["traffic_police"],
+            resources["barricades"],
+            resources["tow_trucks"],
+            resources["ambulances"]
+        ]
+    })
 
-        resource_df = pd.DataFrame({
-
-            "Resource": [
-
-                "Police",
-                "Barricades",
-                "Tow Trucks",
-                "Ambulances"
-            ],
-
-            "Units": [
-
-                r["traffic_police"],
-                r["barricades"],
-                r["tow_trucks"],
-                r["ambulances"]
-            ]
-        })
-
-        st.bar_chart(
-            resource_df.set_index(
-                "Resource"
-            )
+    st.bar_chart(
+        resource_df.set_index(
+            "Resource"
         )
-        
-                # =====================================================
-        # DIVERSION EFFECTIVENESS
-        # =====================================================
+    )
 
-        st.divider()
+    # =====================================================
+    # DIVERSION EFFECTIVENESS
+    # =====================================================
 
-        st.header("🚧 Diversion Effectiveness")
+    st.divider()
 
-        if diversion["activate"]:
+    st.header("🚧 Diversion Effectiveness")
+
+    if diversion.get("activate", False):
+
+        c1, c2 = st.columns(2)
+
+        with c1:
 
             st.metric(
                 "Expected Reduction",
@@ -889,6 +920,8 @@ Expected Time Saving:
                 ]
             )
 
+        with c2:
+
             st.metric(
                 "Expected Time Saving",
                 diversion[
@@ -896,73 +929,72 @@ Expected Time Saving:
                 ]
             )
 
-        else:
+    else:
 
-            st.info(
-                "No diversion active."
-            )
-            
-                    # =====================================================
-        # TRAFFICSENSE SCORECARD
-        # =====================================================
-
-        st.divider()
-
-        st.header("🏆 TrafficSense Scorecard")
-
-        score = round(
-
-            (
-                result["traffic_impact_index"]
-                * 0.5
-            )
-
-            +
-
-            (
-                rec["risk_score"]
-                * 0.5
-            ),
-
-            2
+        st.info(
+            "No diversion active."
         )
 
-        st.metric(
-            "TrafficSense Index",
-            score
+    # =====================================================
+    # TRAFFICSENSE SCORECARD
+    # =====================================================
+
+    st.divider()
+
+    st.header("🏆 TrafficSense Scorecard")
+
+    score = round(
+
+        (
+            result["traffic_impact_index"]
+            * 0.5
         )
 
-        st.progress(
-            min(
-                score / 100,
-                1.0
-            )
+        +
+
+        (
+            rec["risk_score"]
+            * 0.5
+        ),
+
+        2
+    )
+
+    st.metric(
+        "TrafficSense Index",
+        score
+    )
+
+    st.progress(
+        min(
+            score / 100,
+            1.0
         )
-        
-        
-                # =====================================================
-        # MODEL CONFIDENCE
-        # =====================================================
+    )
 
-        st.divider()
+    # =====================================================
+    # MODEL CONFIDENCE
+    # =====================================================
 
-        st.header("🎯 Prediction Confidence")
+    st.divider()
 
-        confidence = max(
-            70,
-            min(
-                98,
-                int(
-                    100
-                    - abs(
-                        result["traffic_impact_index"]
-                        - 50
-                    ) / 2
-                )
+    st.header("🎯 Prediction Confidence")
+
+    confidence = max(
+        70,
+        min(
+            98,
+            int(
+                100
+                - abs(
+                    result["traffic_impact_index"]
+                    - 50
+                ) / 2
             )
         )
+    )
 
-        st.metric(
-            "Confidence",
-            f"{confidence}%"
-        )
+    st.metric(
+        "Confidence",
+        f"{confidence}%"
+    )

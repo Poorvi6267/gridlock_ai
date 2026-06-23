@@ -164,7 +164,7 @@ def recommend_diversion(
         level
     )
 
-    activate = tii >= 60
+    activate = tii >= 70
 
     if not activate:
 
